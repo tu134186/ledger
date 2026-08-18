@@ -1,0 +1,22 @@
+name: Build
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          ZIP=$(ls -t *.zip | head -1)
+          unzip -o "$ZIP"
+          cd ledger-app
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -project Ledger.xcodeproj -scheme Ledger -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Ledger.app Payload/
+          zip -r Ledger.ipa Payload
+          cp Ledger.ipa ..
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ledger.ipa
+          path: Ledger.ipa
