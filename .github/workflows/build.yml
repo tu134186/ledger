@@ -1,77 +1,46 @@
-name: 编译 Ledger IPA
-
+name: Build IPA
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
-      - name: 拉取代码
-        uses: actions/checkout@v4
-
-      - name: 解压源码
+      - uses: actions/checkout@v4
+      - name: Select Latest Xcode
         run: |
-          set -e
-          ZIP=$(ls -t *.zip | head -1)
-          echo "压缩包: $ZIP"
-          unzip -o "$ZIP"
-          echo "解压完成，文件列表:"
-          ls -la
-          PROJECT_DIR=$(find . -name "project.yml" -type f | head -1 | xargs dirname)
-          echo "项目目录: $PROJECT_DIR"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-
-      - name: 安装 XcodeGen
-        run: brew install xcodegen
-
-      - name: 生成 Xcode 项目
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST_XCODE" ]; then
+            echo "切换到: $LATEST_XCODE"
+            sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          fi
           xcodebuild -version
-          sed -i '' 's/xcodeVersion: "15.0"/xcodeVersion: "14.0"/' project.yml
-          echo "修改后的配置:"
-          grep xcodeVersion project.yml
-          xcodegen generate
-          echo "生成的项目文件:"
-          ls -la *.xcodeproj
-
-      - name: 编译（不签名）
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode Project
+        run: xcodegen generate
+      - name: Build
         run: |
-          set -e
-          cd "$PROJECT_DIR"
           xcodebuild \
             -project Ledger.xcodeproj \
             -scheme Ledger \
             -configuration Release \
-            -sdk iphoneos \
             -derivedDataPath build \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="" \
-            ONLY_ACTIVE_ARCH=NO \
             build
-
-      - name: 打包 IPA
+      - name: Package IPA
         run: |
-          set -e
-          cd "$PROJECT_DIR"
-          APP_PATH=$(find build/Build/Products -name "Ledger.app" -type d | head -1)
-          echo "App路径: $APP_PATH"
-          ls -la "$APP_PATH"
           mkdir -p Payload
-          cp -R "$APP_PATH" Payload/
+          cp -R build/Build/Products/Release-iphoneos/Ledger.app Payload/
           zip -r Ledger.ipa Payload
-          echo "打包完成:"
           ls -lh Ledger.ipa
-
-      - name: 上传 IPA
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Ledger.ipa
-          path: ${{ env.PROJECT_DIR }}/Ledger.ipa
+          path: Ledger.ipa
