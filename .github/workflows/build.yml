@@ -8,6 +8,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Select Latest Xcode
         run: |
           LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
@@ -16,12 +17,35 @@ jobs:
             sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           fi
           xcodebuild -version
+
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Locate Project
+        id: locate
+        run: |
+          echo "=== 当前目录结构 ==="
+          ls -la
+          echo "===================="
+          PROJECT_DIR=$(find . -name "project.yml" -maxdepth 3 2>/dev/null | head -1 | xargs dirname)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "未找到 project.yml，列出所有文件:"
+            find . -maxdepth 3 -type f | head -30
+            exit 1
+          fi
+          echo "找到项目目录: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+
       - name: Generate Xcode Project
-        run: xcodegen generate
+        run: |
+          cd "${{ steps.locate.outputs.project_dir }}"
+          echo "在 $(pwd) 执行 xcodegen"
+          ls -la
+          xcodegen generate
+
       - name: Build
         run: |
+          cd "${{ steps.locate.outputs.project_dir }}"
           xcodebuild \
             -project Ledger.xcodeproj \
             -scheme Ledger \
@@ -34,13 +58,16 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="" \
             build
+
       - name: Package IPA
         run: |
+          cd "${{ steps.locate.outputs.project_dir }}"
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Ledger.app Payload/
           zip -r Ledger.ipa Payload
           ls -lh Ledger.ipa
+
       - uses: actions/upload-artifact@v4
         with:
           name: Ledger.ipa
-          path: Ledger.ipa
+          path: ${{ steps.locate.outputs.project_dir }}/Ledger.ipa
