@@ -21,26 +21,37 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Unzip Project
+        run: |
+          if [ -f app.zip ]; then
+            echo "找到 app.zip，正在解压..."
+            unzip -o app.zip -d .
+            echo "解压完成，当前目录:"
+            ls -la
+          else
+            echo "未找到 app.zip，跳过解压"
+          fi
+
       - name: Locate Project
         id: locate
         run: |
-          echo "=== 当前目录结构 ==="
-          ls -la
-          echo "===================="
-          PROJECT_DIR=$(find . -name "project.yml" -maxdepth 3 2>/dev/null | head -1 | xargs dirname)
+          echo "=== 搜索 project.yml ==="
+          find . -name "project.yml" -not -path "*/.git/*" 2>/dev/null
+          PROJECT_DIR=$(find . -name "project.yml" -not -path "*/.git/*" 2>/dev/null | head -1 | xargs dirname)
           if [ -z "$PROJECT_DIR" ]; then
-            echo "未找到 project.yml，列出所有文件:"
-            find . -maxdepth 3 -type f | head -30
+            echo "未找到 project.yml，所有文件:"
+            find . -not -path "*/.git/*" -type f | head -50
             exit 1
           fi
-          echo "找到项目目录: $PROJECT_DIR"
+          echo "项目目录: $PROJECT_DIR"
+          echo "该目录内容:"
+          ls -la "$PROJECT_DIR"
           echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
 
       - name: Generate Xcode Project
         run: |
           cd "${{ steps.locate.outputs.project_dir }}"
           echo "在 $(pwd) 执行 xcodegen"
-          ls -la
           xcodegen generate
 
       - name: Build
