@@ -31,7 +31,8 @@ jobs:
         run: |
           set -e
           cd "$PROJECT_DIR"
-          xcodegen generate
+          xcodebuild -version
+          xcodegen generate --xcode-version 14.0
           echo "生成的项目文件:"
           ls -la *.xcodeproj
 
