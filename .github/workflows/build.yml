@@ -32,7 +32,10 @@ jobs:
           set -e
           cd "$PROJECT_DIR"
           xcodebuild -version
-          xcodegen generate --xcode-version 14.0
+          sed -i '' 's/xcodeVersion: "15.0"/xcodeVersion: "14.0"/' project.yml
+          echo "修改后的配置:"
+          grep xcodeVersion project.yml
+          xcodegen generate
           echo "生成的项目文件:"
           ls -la *.xcodeproj
 
