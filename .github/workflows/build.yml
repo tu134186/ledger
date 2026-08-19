@@ -1,22 +1,55 @@
-name: Build
-on: [push, workflow_dispatch]
+name: 编译 Ledger IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - run: |
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 解压并编译
+        run: |
+          set -e
           ZIP=$(ls -t *.zip | head -1)
+          echo "解压: $ZIP"
           unzip -o "$ZIP"
           cd ledger-app
+          
+          echo "安装 XcodeGen"
           brew install xcodegen
+          
+          echo "生成 Xcode 项目"
           xcodegen generate
-          xcodebuild -project Ledger.xcodeproj -scheme Ledger -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          
+          echo "开始编译"
+          xcodebuild \
+            -project Ledger.xcodeproj \
+            -scheme Ledger \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            build
+          
+          echo "打包 IPA"
+          APP_PATH=$(find build/Build/Products -name "Ledger.app" -type d | head -1)
+          echo "App 路径: $APP_PATH"
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/Ledger.app Payload/
+          cp -R "$APP_PATH" Payload/
           zip -r Ledger.ipa Payload
-          cp Ledger.ipa ..
-      - uses: actions/upload-artifact@v4
+          ls -lh Ledger.ipa
+
+      - name: 上传 IPA
+        uses: actions/upload-artifact@v4
         with:
           name: Ledger.ipa
-          path: Ledger.ipa
+          path: ledger-app/Ledger.ipa
